@@ -43,8 +43,8 @@ async function getFtpFileContent(filePath) {
 async function putFtpFileContent(filePath, content) {
   try {
     const tempFilePath = path.join(__dirname, 'temp.json');
-    fs.writeFileSync(tempFilePath, content);
-    await ftp.put(tempFilePath, filePath);
+    fs.writeFileSync(tempFilePath, content, { encoding: 'utf8' });
+    await ftp.put(fs.createReadStream(tempFilePath), filePath);
     fs.unlinkSync(tempFilePath); // Delete the temp file
   } catch (err) {
     console.error('Error putting file content: ', err);
