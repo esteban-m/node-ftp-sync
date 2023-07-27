@@ -134,3 +134,15 @@ cron.schedule('*/5 * * * *', function() {
   console.log('Running the synchronization task...');
   synchronize().catch(err => console.error(err));
 });
+
+const httpServer = http.createServer((req, res) => {
+  res.writeHead(200, {'Content-Type': 'text/plain'});
+  res.end('Online\n');
+});
+
+const port = process.env.PORT || 3000;
+
+httpServer.listen(port, '0.0.0.0', err => {
+  if (err) throw err;
+  console.log(`Listening on port ${port}`);
+});
