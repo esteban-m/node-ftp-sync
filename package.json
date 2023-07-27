@@ -1,11 +1,11 @@
 {
-  "name": "express-hello-world",
+  "name": "node-ftp-sync",
   "version": "1.0.0",
-  "description": "Express Hello World on Render",
+  "description": "NodeJS FTP sync on each server",
   "main": "app.js",
-  "repository": "https://github.com/render-examples/express-hello-world",
-  "author": "Render Developers",
-  "license": "MIT",
+  "repository": "https://github.com/esteban-m/node-ftp-sync",
+  "author": "",
+  "license": "",
   "private": false,
   "scripts": {
     "start": "node app.js"
