@@ -1,5 +1,4 @@
 const PromiseFtp = require('promise-ftp');
-const ftp = new PromiseFtp();
 const fs = require('fs');
 const path = require('path');
 const cron = require('node-cron');
@@ -7,9 +6,9 @@ const cron = require('node-cron');
 //get ftp servers from json file
 const ftpServers = JSON.parse(fs.readFileSync('ftp_servers.json', 'utf8'));
 
-async function connectFtp(serverInfo) {
+async function connectFtp(serverInfo, ftpInstance) {
   try {
-    await ftp.connect({
+    await ftpInstance.connect({
       host: serverInfo.server,
       user: serverInfo.user,
       password: serverInfo.password
@@ -19,15 +18,16 @@ async function connectFtp(serverInfo) {
   }
 }
 
-async function closeFtp() {
+async function closeFtp(ftpInstance) {
   try {
-    await ftp.end();
+    await ftpInstance.end();
   } catch (err) {
     console.error('Error closing FTP connection: ', err);
   }
 }
 
-async function getFtpFileContent(filePath) {
+
+async function getFtpFileContent(ftp, filePath) {
   try {
     const stream = await ftp.get(filePath);
     const chunks = [];
@@ -40,7 +40,7 @@ async function getFtpFileContent(filePath) {
   }
 }
 
-async function putFtpFileContent(filePath, content) {
+async function putFtpFileContent(ftp, filePath, content) {
   try {
     const tempFilePath = path.join(__dirname, 'temp.json');
     fs.writeFileSync(tempFilePath, content, { encoding: 'utf8' });
@@ -61,7 +61,8 @@ async function deleteFtpFile(filePath) {
 
 async function synchronize() {
   for (let serverInfo of ftpServers) {
-    await connectFtp(serverInfo);
+    const ftp = new PromiseFtp();
+    await connectFtp(serverInfo, ftp);
 
     const ordersPath = 'orders.json';
     const actionsPath = 'actions.json';
@@ -70,17 +71,17 @@ async function synchronize() {
     try {
       await ftp.get(ordersPath);
     } catch (err) {
-      await putFtpFileContent(ordersPath, '[]');
+      await putFtpFileContent(ftp, ordersPath, '[]');
     }
     try {
       await ftp.get(actionsPath);
     } catch (err) {
-      await putFtpFileContent(actionsPath, '[]');
+      await putFtpFileContent(ftp, actionsPath, '[]');
     }
 
     // Fetch and parse the current orders and actions
-    const ordersContent = await getFtpFileContent(ordersPath);
-    const actionsContent = await getFtpFileContent(actionsPath);
+    const ordersContent = await getFtpFileContent(ftp, ordersPath);
+    const actionsContent = await getFtpFileContent(ftp, actionsPath);
     const orders = JSON.parse(ordersContent);
     const actions = JSON.parse(actionsContent);
 
@@ -115,13 +116,13 @@ async function synchronize() {
     });
 
     // Save the updated orders
-    await putFtpFileContent(ordersPath, JSON.stringify(orders));
+    await putFtpFileContent(ftp, ordersPath, JSON.stringify(orders));
 
     // Once synchronization is complete, clear the actions
     actions.length = 0;
-    await putFtpFileContent(actionsPath, JSON.stringify(actions));
+    await putFtpFileContent(ftp, actionsPath, JSON.stringify(actions));
 
-    await closeFtp();
+    await closeFtp(ftp);
   }
 }
 
