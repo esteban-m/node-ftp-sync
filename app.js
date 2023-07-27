@@ -66,6 +66,18 @@ async function synchronize() {
     const ordersPath = 'orders.json';
     const actionsPath = 'actions.json';
 
+    // Create files if they don't exist
+    try {
+      await ftp.get(ordersPath);
+    } catch (err) {
+      await putFtpFileContent(ordersPath, '[]');
+    }
+    try {
+      await ftp.get(actionsPath);
+    } catch (err) {
+      await putFtpFileContent(actionsPath, '[]');
+    }
+
     // Fetch and parse the current orders and actions
     const ordersContent = await getFtpFileContent(ordersPath);
     const actionsContent = await getFtpFileContent(actionsPath);
