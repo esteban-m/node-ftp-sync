@@ -66,76 +66,81 @@ async function deleteFtpFile(ftp, filePath) {
 
 async function synchronize() {
   for (let serverInfo of ftpServers) {
-    const ftp = new PromiseFtp();
-    await connectFtp(serverInfo, ftp);
+    try{
+      const ftp = new PromiseFtp();
+      await connectFtp(serverInfo, ftp);
 
-    const ordersPath = 'orders.json';
-    const actionsPath = 'actions.json';
-    console.log("[" + serverInfo.server + "] step 1");
-    // Create files if they don't exist
-    try {
-      await ftp.get(ordersPath);
-      console.log("[" + serverInfo.server + "] step 2.1");
-    } catch (err) {
-      await putFtpFileContent(ftp, ordersPath, '[]');
-      console.log("[" + serverInfo.server + "] error 2.1" + err);
-    }
-    try {
-      await ftp.get(actionsPath);
-      console.log("[" + serverInfo.server + "] step 2.2");
-    } catch (err) {
-      await putFtpFileContent(ftp, actionsPath, '[]');
-      console.log("[" + serverInfo.server + "] error 2.2" + err);
-    }
-
-    // Fetch and parse the current orders and actions
-    const ordersContent = await getFtpFileContent(ftp, ordersPath);
-    const actionsContent = await getFtpFileContent(ftp, actionsPath);
-    const orders = JSON.parse(ordersContent);
-    const actions = JSON.parse(actionsContent);
-
-    console.log("[" + serverInfo.server + "] step 3");
-
-    // Synchronize the data
-    actions.forEach(action => {
-      const orderIds = action.order_ids.split(',');
-
-      switch (action.action) {
-        case 'add':
-          console.log("[" + serverInfo.server + "] step 4.1");
-          // Add orders that are not already in the list
-          orderIds.forEach(orderId => {
-            if (!orders.find(order => order.id === orderId)) {
-              // Retrieve the new order from somewhere. Here I'm just creating a dummy order
-              const newOrder = { id: orderId, account_id: 'dummy_account', status: 'new' };
-              orders.push(newOrder);
-            }
-          });
-          break;
-        case 'rm':
-          console.log("[" + serverInfo.server + "] step 4.2");
-          // Remove orders that are in the list
-          orderIds.forEach(orderId => {
-            const orderIndex = orders.findIndex(order => order.id === orderId);
-            if (orderIndex !== -1) {
-              orders.splice(orderIndex, 1);
-            }
-          });
-          break;
-        default:
-          console.error(`Unknown action: ${action.action}`);
-          break;
+      const ordersPath = 'orders.json';
+      const actionsPath = 'actions.json';
+      console.log("[" + serverInfo.server + "] step 1");
+      // Create files if they don't exist
+      try {
+        await ftp.get(ordersPath);
+        console.log("[" + serverInfo.server + "] step 2.1");
+      } catch (err) {
+        await putFtpFileContent(ftp, ordersPath, '[]');
+        console.log("[" + serverInfo.server + "] error 2.1" + err);
       }
-    });
+      try {
+        await ftp.get(actionsPath);
+        console.log("[" + serverInfo.server + "] step 2.2");
+      } catch (err) {
+        await putFtpFileContent(ftp, actionsPath, '[]');
+        console.log("[" + serverInfo.server + "] error 2.2" + err);
+      }
 
-    // Save the updated orders
-    await putFtpFileContent(ftp, ordersPath, JSON.stringify(orders));
+      // Fetch and parse the current orders and actions
+      const ordersContent = await getFtpFileContent(ftp, ordersPath);
+      const actionsContent = await getFtpFileContent(ftp, actionsPath);
+      const orders = JSON.parse(ordersContent);
+      const actions = JSON.parse(actionsContent);
 
-    // Once synchronization is complete, clear the actions
-    actions.length = 0;
-    await putFtpFileContent(ftp, actionsPath, JSON.stringify(actions));
-    console.log("[" + serverInfo.server + "] step 5");
-    await closeFtp(ftp);
+      console.log("[" + serverInfo.server + "] step 3");
+
+      // Synchronize the data
+      actions.forEach(action => {
+        const orderIds = action.order_ids.split(',');
+
+        switch (action.action) {
+          case 'add':
+            console.log("[" + serverInfo.server + "] step 4.1");
+            // Add orders that are not already in the list
+            orderIds.forEach(orderId => {
+              if (!orders.find(order => order.id === orderId)) {
+                // Retrieve the new order from somewhere. Here I'm just creating a dummy order
+                const newOrder = { id: orderId, account_id: 'dummy_account', status: 'new' };
+                orders.push(newOrder);
+              }
+            });
+            break;
+          case 'rm':
+            console.log("[" + serverInfo.server + "] step 4.2");
+            // Remove orders that are in the list
+            orderIds.forEach(orderId => {
+              const orderIndex = orders.findIndex(order => order.id === orderId);
+              if (orderIndex !== -1) {
+                orders.splice(orderIndex, 1);
+              }
+            });
+            break;
+          default:
+            console.error(`Unknown action: ${action.action}`);
+            break;
+        }
+      });
+
+      // Save the updated orders
+      await putFtpFileContent(ftp, ordersPath, JSON.stringify(orders));
+
+      // Once synchronization is complete, clear the actions
+      actions.length = 0;
+      await putFtpFileContent(ftp, actionsPath, JSON.stringify(actions));
+      console.log("[" + serverInfo.server + "] step 5");
+      await closeFtp(ftp);
+    } catch (err) {
+      console.error('Error synchronizing: ', err);
+      throw err;
+    }
   }
 }
 
