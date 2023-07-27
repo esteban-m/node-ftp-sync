@@ -1,61 +1,119 @@
-const express = require("express");
-const app = express();
-const port = process.env.PORT || 3001;
+const PromiseFtp = require('promise-ftp');
+const ftp = new PromiseFtp();
+const fs = require('fs');
+const path = require('path');
+const cron = require('node-cron');
 
-app.get("/", (req, res) => res.type('html').send(html));
+//get ftp servers from json file
+const ftpServers = JSON.parse(fs.readFileSync('ftp_servers.json', 'utf8'));
 
-const server = app.listen(port, () => console.log(`Example app listening on port ${port}!`));
+async function connectFtp(serverInfo) {
+  try {
+    await ftp.connect({
+      host: serverInfo.server,
+      user: serverInfo.user,
+      password: serverInfo.password
+    });
+  } catch (err) {
+    console.error('Error connecting to FTP server: ', err);
+  }
+}
 
-server.keepAliveTimeout = 120 * 1000;
-server.headersTimeout = 120 * 1000;
+async function closeFtp() {
+  try {
+    await ftp.end();
+  } catch (err) {
+    console.error('Error closing FTP connection: ', err);
+  }
+}
 
-const html = `
-<!DOCTYPE html>
-<html>
-  <head>
-    <title>Hello from Render!</title>
-    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
-    <script>
-      setTimeout(() => {
-        confetti({
-          particleCount: 100,
-          spread: 70,
-          origin: { y: 0.6 },
-          disableForReducedMotion: true
-        });
-      }, 500);
-    </script>
-    <style>
-      @import url("https://p.typekit.net/p.css?s=1&k=vnd5zic&ht=tk&f=39475.39476.39477.39478.39479.39480.39481.39482&a=18673890&app=typekit&e=css");
-      @font-face {
-        font-family: "neo-sans";
-        src: url("https://use.typekit.net/af/00ac0a/00000000000000003b9b2033/27/l?primer=7cdcb44be4a7db8877ffa5c0007b8dd865b3bbc383831fe2ea177f62257a9191&fvd=n7&v=3") format("woff2"), url("https://use.typekit.net/af/00ac0a/00000000000000003b9b2033/27/d?primer=7cdcb44be4a7db8877ffa5c0007b8dd865b3bbc383831fe2ea177f62257a9191&fvd=n7&v=3") format("woff"), url("https://use.typekit.net/af/00ac0a/00000000000000003b9b2033/27/a?primer=7cdcb44be4a7db8877ffa5c0007b8dd865b3bbc383831fe2ea177f62257a9191&fvd=n7&v=3") format("opentype");
-        font-style: normal;
-        font-weight: 700;
+async function getFtpFileContent(filePath) {
+  try {
+    const stream = await ftp.get(filePath);
+    const chunks = [];
+    for await (let chunk of stream) {
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks).toString('utf8');
+  } catch (err) {
+    console.error('Error getting file content: ', err);
+  }
+}
+
+async function putFtpFileContent(filePath, content) {
+  try {
+    const tempFilePath = path.join(__dirname, 'temp.json');
+    fs.writeFileSync(tempFilePath, content);
+    await ftp.put(tempFilePath, filePath);
+    fs.unlinkSync(tempFilePath); // Delete the temp file
+  } catch (err) {
+    console.error('Error putting file content: ', err);
+  }
+}
+
+async function deleteFtpFile(filePath) {
+  try {
+    await ftp.delete(filePath);
+  } catch (err) {
+    console.error('Error deleting file: ', err);
+  }
+}
+
+async function synchronize() {
+  for (let serverInfo of ftpServers) {
+    await connectFtp(serverInfo);
+
+    const ordersPath = 'orders.json';
+    const actionsPath = 'actions.json';
+
+    // Fetch and parse the current orders and actions
+    const ordersContent = await getFtpFileContent(ordersPath);
+    const actionsContent = await getFtpFileContent(actionsPath);
+    const orders = JSON.parse(ordersContent);
+    const actions = JSON.parse(actionsContent);
+
+    // Synchronize the data
+    actions.forEach(action => {
+      const orderIds = action.order_ids.split(',');
+
+      switch (action.action) {
+        case 'add':
+          // Add orders that are not already in the list
+          orderIds.forEach(orderId => {
+            if (!orders.find(order => order.id === orderId)) {
+              // Retrieve the new order from somewhere. Here I'm just creating a dummy order
+              const newOrder = { id: orderId, account_id: 'dummy_account', status: 'new' };
+              orders.push(newOrder);
+            }
+          });
+          break;
+        case 'rm':
+          // Remove orders that are in the list
+          orderIds.forEach(orderId => {
+            const orderIndex = orders.findIndex(order => order.id === orderId);
+            if (orderIndex !== -1) {
+              orders.splice(orderIndex, 1);
+            }
+          });
+          break;
+        default:
+          console.error(`Unknown action: ${action.action}`);
+          break;
       }
-      html {
-        font-family: neo-sans;
-        font-weight: 700;
-        font-size: calc(62rem / 16);
-      }
-      body {
-        background: white;
-      }
-      section {
-        border-radius: 1em;
-        padding: 1em;
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        margin-right: -50%;
-        transform: translate(-50%, -50%);
-      }
-    </style>
-  </head>
-  <body>
-    <section>
-      Hello from Render!
-    </section>
-  </body>
-</html>
-`
+    });
+
+    // Save the updated orders
+    await putFtpFileContent(ordersPath, JSON.stringify(orders));
+
+    // Once synchronization is complete, clear the actions
+    actions.length = 0;
+    await putFtpFileContent(actionsPath, JSON.stringify(actions));
+
+    await closeFtp();
+  }
+}
+
+cron.schedule('*/5 * * * *', function() {
+  console.log('Running the synchronization task...');
+  synchronize().catch(err => console.error(err));
+});
