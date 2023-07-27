@@ -15,6 +15,7 @@ async function connectFtp(serverInfo, ftpInstance) {
     });
   } catch (err) {
     console.error('Error connecting to FTP server: ', err);
+    throw err;
   }
 }
 
@@ -23,9 +24,9 @@ async function closeFtp(ftpInstance) {
     await ftpInstance.end();
   } catch (err) {
     console.error('Error closing FTP connection: ', err);
+    throw err;
   }
 }
-
 
 async function getFtpFileContent(ftp, filePath) {
   try {
@@ -37,6 +38,7 @@ async function getFtpFileContent(ftp, filePath) {
     return Buffer.concat(chunks).toString('utf8');
   } catch (err) {
     console.error('Error getting file content: ', err);
+    throw err;
   }
 }
 
@@ -48,14 +50,16 @@ async function putFtpFileContent(ftp, filePath, content) {
     fs.unlinkSync(tempFilePath); // Delete the temp file
   } catch (err) {
     console.error('Error putting file content: ', err);
+    throw err;
   }
 }
 
-async function deleteFtpFile(filePath) {
+async function deleteFtpFile(ftp, filePath) {
   try {
     await ftp.delete(filePath);
   } catch (err) {
     console.error('Error deleting file: ', err);
+    throw err;
   }
 }
 
