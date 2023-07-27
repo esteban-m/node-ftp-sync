@@ -1,3 +1,4 @@
+const http = require('http');
 const PromiseFtp = require('promise-ftp');
 const fs = require('fs');
 const path = require('path');
