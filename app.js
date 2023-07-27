@@ -1,4 +1,3 @@
-const http = require('http');
 const PromiseFtp = require('promise-ftp');
 const fs = require('fs');
 const path = require('path');
@@ -49,8 +48,12 @@ async function putFtpFileContent(ftp, filePath, content) {
     fs.writeFileSync(tempFilePath, content, { encoding: 'utf8' });
     await ftp.put(fs.createReadStream(tempFilePath), filePath);
     fs.unlinkSync(tempFilePath); // Delete the temp file
+    //Print server info
+    console.log('Server: ' + ftp._host + ' User: ' + ftp._user + ' File: ' + filePath);
   } catch (err) {
     console.error('Error putting file content: ', err);
+    //Print server info
+    console.log('Server: ' + ftp._host + ' User: ' + ftp._user + ' File: ' + filePath);
     throw err;
   }
 }
