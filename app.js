@@ -49,12 +49,8 @@ async function putFtpFileContent(ftp, filePath, content) {
     fs.writeFileSync(tempFilePath, content, { encoding: 'utf8' });
     await ftp.put(fs.createReadStream(tempFilePath), filePath);
     fs.unlinkSync(tempFilePath); // Delete the temp file
-    //Print server info
-    console.log('Server: ' + ftp._host + ' User: ' + ftp._user + ' File: ' + filePath);
   } catch (err) {
     console.error('Error putting file content: ', err);
-    //Print server info
-    console.log('Server: ' + ftp._host + ' User: ' + ftp._user + ' File: ' + filePath);
     throw err;
   }
 }
@@ -75,17 +71,21 @@ async function synchronize() {
 
     const ordersPath = 'orders.json';
     const actionsPath = 'actions.json';
-
+    console.log("[" + serverInfo.server + "] step 1");
     // Create files if they don't exist
     try {
       await ftp.get(ordersPath);
+      console.log("[" + serverInfo.server + "] step 2.1");
     } catch (err) {
       await putFtpFileContent(ftp, ordersPath, '[]');
+      console.log("[" + serverInfo.server + "] error 2.1" + err);
     }
     try {
       await ftp.get(actionsPath);
+      console.log("[" + serverInfo.server + "] step 2.2");
     } catch (err) {
       await putFtpFileContent(ftp, actionsPath, '[]');
+      console.log("[" + serverInfo.server + "] error 2.2" + err);
     }
 
     // Fetch and parse the current orders and actions
@@ -94,12 +94,15 @@ async function synchronize() {
     const orders = JSON.parse(ordersContent);
     const actions = JSON.parse(actionsContent);
 
+    console.log("[" + serverInfo.server + "] step 3");
+
     // Synchronize the data
     actions.forEach(action => {
       const orderIds = action.order_ids.split(',');
 
       switch (action.action) {
         case 'add':
+          console.log("[" + serverInfo.server + "] step 4.1");
           // Add orders that are not already in the list
           orderIds.forEach(orderId => {
             if (!orders.find(order => order.id === orderId)) {
@@ -110,6 +113,7 @@ async function synchronize() {
           });
           break;
         case 'rm':
+          console.log("[" + serverInfo.server + "] step 4.2");
           // Remove orders that are in the list
           orderIds.forEach(orderId => {
             const orderIndex = orders.findIndex(order => order.id === orderId);
@@ -130,7 +134,7 @@ async function synchronize() {
     // Once synchronization is complete, clear the actions
     actions.length = 0;
     await putFtpFileContent(ftp, actionsPath, JSON.stringify(actions));
-
+    console.log("[" + serverInfo.server + "] step 5");
     await closeFtp(ftp);
   }
 }
